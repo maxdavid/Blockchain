@@ -4,6 +4,9 @@ import requests
 import sys
 import json
 
+DIFFICULTY = 6
+lambda_coins = 0
+
 
 def proof_of_work(block):
     """
@@ -13,7 +16,13 @@ def proof_of_work(block):
     in an effort to find a number that is a valid proof
     :return: A valid proof for the provided block
     """
-    pass
+    block_string = json.dumps(block, sort_keys=True)
+    proof = 0
+    print("MINING...")
+    while valid_proof(block_string, proof) is False:
+        proof += 1
+    print("GOT IT")
+    return proof
 
 
 def valid_proof(block_string, proof):
@@ -27,10 +36,12 @@ def valid_proof(block_string, proof):
     correct number of leading zeroes.
     :return: True if the resulting hash is a valid proof, False otherwise
     """
-    pass
+    proof = f"{block_string}{proof}".encode()
+    _hash = hashlib.sha256(proof).hexdigest()
+    return _hash[:DIFFICULTY] == "0" * DIFFICULTY
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # What is the server address? IE `python3 miner.py https://server.com/api/`
     if len(sys.argv) > 1:
         node = sys.argv[1]
@@ -44,27 +55,41 @@ if __name__ == '__main__':
     f.close()
 
     # Run forever until interrupted
-    while True:
-        r = requests.get(url=node + "/last_block")
-        # Handle non-json response
-        try:
-            data = r.json()
-        except ValueError:
-            print("Error:  Non-json response")
-            print("Response returned:")
-            print(r)
-            break
+    try:
+        while True:
+            r = requests.get(url=node + "/last_block")
+            # Handle non-json response
+            try:
+                data = r.json()
+            except ValueError:
+                print("Error:  Non-json response")
+                print("Response returned:")
+                print(r)
+                break
 
-        # TODO: Get the block from `data` and use it to look for a new proof
-        # new_proof = ???
+            # TODO: Get the block from `data` and use it to look for a new proof
+            last_block = data["block"]
+            new_proof = proof_of_work(last_block)
 
-        # When found, POST it to the server {"proof": new_proof, "id": id}
-        post_data = {"proof": new_proof, "id": id}
+            # When found, POST it to the server {"proof": new_proof, "id": id}
+            post_data = {"proof": new_proof, "id": id}
 
-        r = requests.post(url=node + "/mine", json=post_data)
-        data = r.json()
+            r = requests.post(url=node + "/mine", json=post_data)
+            try:
+                data = r.json()
+            except json.decoder.JSONDecodeError:
+                print("Unexpected response from server.")
+                print("Unable to proceed mining. Quitting...")
+                break
 
-        # TODO: If the server responds with a 'message' 'New Block Forged'
-        # add 1 to the number of coins mined and print it.  Otherwise,
-        # print the message from the server.
-        pass
+            # TODO: If the server responds with a 'message' 'New Block Forged'
+            # add 1 to the number of coins mined and print it.  Otherwise,
+            # print the message from the server.
+            if "Correct" in data["message"]:
+                lambda_coins += 1
+                print("YEEEEAHHHHHH COIN")
+                print(f"Total lambda coins: {lambda_coins}")
+    except KeyboardInterrupt:
+        print("Keyboard Interrupt received. Quitting...")
+
+    print("\nTotal coins mined:", lambda_coins)
